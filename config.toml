@@ -1,0 +1,8 @@
+[paths]
+# Base folder name for logs (will be resolved relative to project directory)
+base_folder = "prompt_logs"
+
+# Subdirectory names within base_logs_location
+temp_logs = "temp_logs"
+final_logs = "final_logs"
+aggregate_logs = "aggregate_logs"
