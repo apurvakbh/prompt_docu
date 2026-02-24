@@ -127,11 +127,21 @@ All directories are created automatically on server startup if they don't exist.
 
 ### Via pip (Recommended)
 
-Install the package from PyPI:
+Install the package directly from PyPI:
 
 ```bash
 pip install prompt-docu
 ```
+
+### Verification
+
+Once installed, you can verify the installation by starting the server:
+
+```bash
+prompt-docu
+```
+
+(Note: This will initialize the server and create the `prompt_logs/` directory in your current workspace).
 
 ### From Source
 
