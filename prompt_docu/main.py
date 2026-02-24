@@ -285,5 +285,9 @@ async def main():
     server = MCPServer()
     await server.run()
 
-if __name__ == "__main__":
+def cli():
+    """CLI entry point for console script"""
     asyncio.run(main())
+
+if __name__ == "__main__":
+    cli()

@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "prompt-docu"
+version = "0.1.1"
+description = "A minimal MCP server for logging, tracking, and documenting development prompts"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "GPL-3.0"}
+authors = [
+    {name = "Apurva Bhatt", email = "response2apurva@yahoo.com"}
+]
+keywords = ["mcp", "prompt", "logging", "documentation", "ai", "development"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Documentation",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "mcp>=0.1.0",
+    "tomli>=2.0.0; python_version < '3.11'",
+]
+
+[project.urls]
+Homepage = "https://github.com/apurva-bhatt/prompt_docu"
+Repository = "https://github.com/apurva-bhatt/prompt_docu"
+Issues = "https://github.com/apurva-bhatt/prompt_docu/issues"
+
+[project.scripts]
+prompt-docu = "prompt_docu.main:cli"
+
+[tool.setuptools]
+packages = ["prompt_docu"]
+
+[tool.setuptools.package-data]
+prompt_docu = ["config.toml"]

@@ -1,3 +1,12 @@
 prompt_logs/
 src/__pycache__/
 __pycache__/
+
+# API Tokens - Never commit!
+.pypi_tokens
+.pypirc
+
+# Build artifacts
+dist/
+build/
+*.egg-info/

@@ -122,23 +122,57 @@ All directories are created automatically on server startup if they don't exist.
 
 ## Installation
 
-1.  **Install Dependencies**  
-    Ensure you have the required packages installed:
-    ```bash
-    pip install mcp
-    
-    # For Python < 3.11, also install tomli for TOML support:
-    pip install tomli
-    ```
+**Requirements:**
+- Python 3.8 or higher (Python 3.12+ recommended)
 
-2.  **Run the Server**  
-    Start the MCP server:
-    ```bash
-    python main.py
-    ```
+### Via pip (Recommended)
 
-3.  **Connect Your MCP Client**  
-    Configure your MCP client (e.g., Claude Desktop, VS Code with MCP extension) to connect to this server.
+Install the package from PyPI:
+
+```bash
+pip install prompt-docu
+```
+
+### From Source
+
+Alternatively, clone the repository and install locally:
+
+```bash
+git clone https://github.com/apurva-bhatt/prompt_docu.git
+cd prompt_docu
+pip install -e .
+```
+
+## Running the Server
+
+After installation, you can start the MCP server directly:
+
+```bash
+prompt-docu
+```
+
+## MCP Client Configuration
+
+### Claude Desktop
+
+Add this configuration to your Claude Desktop config file:
+
+**On macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`  
+**On Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "prompt-docu": {
+      "command": "prompt-docu"
+    }
+  }
+}
+```
+
+### Other MCP Clients
+
+For other MCP clients (VS Code extensions, custom implementations), configure them to execute the `prompt-docu` command as the server entry point.
 
 ## Usage Example
 
