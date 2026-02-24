@@ -36,7 +36,15 @@ from mcp.types import (
 
 # Import from src modules
 from src.tools import TOOLS
-from src.helper import save_prompt_to_file, get_daily_folder_path, aggregate_prompts
+from src.helper import (
+    save_prompt_to_file, 
+    get_daily_folder_path, 
+    aggregate_prompts,
+    clear_temp_logs_folder,
+    clear_aggregate_logs_folder,
+    summarize_aggregate_files,
+    create_readme_from_final
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -109,6 +117,14 @@ class MCPServer:
                 return await self._handle_save_current(arguments)
             elif name == "aggregate_prompts":
                 return await self._handle_aggregate(arguments)
+            elif name == "clear_temp_logs":
+                return await self._handle_clear_temp(arguments)
+            elif name == "clear_aggregate_logs":
+                return await self._handle_clear_aggregate(arguments)
+            elif name == "summarize_aggregates":
+                return await self._handle_summarize_aggregates(arguments)
+            elif name == "create_readme":
+                return await self._handle_create_readme(arguments)
             else:
                 raise ValueError(f"Unknown tool: {name}")
                 
@@ -187,6 +203,73 @@ class MCPServer:
                 text=result_message
             )
         ]
+    
+    async def _handle_clear_temp(self, arguments: dict[str, Any]) -> list[TextContent]:
+        """Handle clear temp logs tool"""
+        logger.info("Clearing temp logs folder...")
+        
+        result_message = clear_temp_logs_folder(self.temp_logs_dir)
+        
+        logger.info(f"Clear temp complete: {result_message}")
+        
+        return [
+            TextContent(
+                type="text",
+                text=result_message
+            )
+        ]
+    
+    async def _handle_clear_aggregate(self, arguments: dict[str, Any]) -> list[TextContent]:
+        """Handle clear aggregate logs tool"""
+        logger.info("Clearing aggregate logs folder...")
+        
+        result_message = clear_aggregate_logs_folder(self.aggregate_logs_dir)
+        
+        logger.info(f"Clear aggregate complete: {result_message}")
+        
+        return [
+            TextContent(
+                type="text",
+                text=result_message
+            )
+        ]
+    
+    async def _handle_summarize_aggregates(self, arguments: dict[str, Any]) -> list[TextContent]:
+        """Handle summarize aggregates tool"""
+        logger.info("Summarizing aggregate files...")
+        
+        result_message = summarize_aggregate_files(
+            self.aggregate_logs_dir,
+            self.final_logs_dir
+        )
+        
+        logger.info(f"Summarize complete: {result_message}")
+        
+        return [
+            TextContent(
+                type="text",
+                text=result_message
+            )
+        ]
+    
+    async def _handle_create_readme(self, arguments: dict[str, Any]) -> list[TextContent]:
+        """Handle create README tool"""
+        logger.info("Creating README from final logs...")
+        
+        result_message = create_readme_from_final(
+            self.final_logs_dir,
+            self.prompt_logs_dir
+        )
+        
+        logger.info(f"Create README complete: {result_message}")
+        
+        return [
+            TextContent(
+                type="text",
+                text=result_message
+            )
+        ]
+
     
     async def run(self):
         """Run the server"""        

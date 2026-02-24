@@ -5,6 +5,7 @@ This module contains utility functions for handling file I/O operations.
 """
 
 import csv
+import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -423,3 +424,303 @@ def _update_csv_tracker(
                 now_str,
                 aggregate_file.name
             ])
+
+
+def clear_temp_logs_folder(temp_logs_dir: Path) -> str:
+    """
+    Clear all .txt files from the temp logs folder.
+    
+    Args:
+        temp_logs_dir: Path to temp logs directory
+        
+    Returns:
+        Success message with count of files deleted
+    """
+    if not temp_logs_dir.exists():
+        return "Temp logs directory does not exist."
+    
+    txt_files = list(temp_logs_dir.rglob('*.txt'))
+    
+    if not txt_files:
+        return "No .txt files found in temp logs folder."
+    
+    deleted_count = 0
+    errors = []
+    
+    for txt_file in txt_files:
+        try:
+            os.remove(txt_file)
+            deleted_count += 1
+        except Exception as e:
+            errors.append(f"Error deleting {txt_file.name}: {str(e)}")
+    
+    result_msg = f"Successfully deleted {deleted_count} file(s) from temp logs."
+    if errors:
+        result_msg += f"\n\nErrors encountered:\n" + "\n".join(errors)
+    
+    return result_msg
+
+
+def clear_aggregate_logs_folder(aggregate_logs_dir: Path) -> str:
+    """
+    Clear all .txt files from the aggregate logs folder while preserving the CSV tracker.
+    
+    Args:
+        aggregate_logs_dir: Path to aggregate logs directory
+        
+    Returns:
+        Success message with count of files deleted
+    """
+    if not aggregate_logs_dir.exists():
+        return "Aggregate logs directory does not exist."
+    
+    txt_files = list(aggregate_logs_dir.rglob('*.txt'))
+    
+    if not txt_files:
+        return "No .txt files found in aggregate logs folder."
+    
+    deleted_count = 0
+    errors = []
+    
+    for txt_file in txt_files:
+        try:
+            os.remove(txt_file)
+            deleted_count += 1
+        except Exception as e:
+            errors.append(f"Error deleting {txt_file.name}: {str(e)}")
+    
+    result_msg = f"Successfully deleted {deleted_count} aggregate file(s). CSV tracker preserved."
+    if errors:
+        result_msg += f"\n\nErrors encountered:\n" + "\n".join(errors)
+    
+    return result_msg
+
+
+def summarize_aggregate_files(aggregate_logs_dir: Path, final_logs_dir: Path) -> str:
+    """
+    Create a comprehensive summary of all aggregate files and save to final logs.
+    
+    Reads all aggregate .txt files, extracts key information about modified files,
+    timestamps, and changes, then creates a summary document in final_logs.
+    
+    Args:
+        aggregate_logs_dir: Path to aggregate logs directory
+        final_logs_dir: Path to final logs directory
+        
+    Returns:
+        Success message with summary details
+    """
+    if not aggregate_logs_dir.exists():
+        return "Aggregate logs directory does not exist."
+    
+    aggregate_files = sorted(aggregate_logs_dir.glob('aggregate_*.txt'))
+    
+    if not aggregate_files:
+        return "No aggregate files found to summarize."
+    
+    # Create summary
+    timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
+    summary_file = final_logs_dir / f"aggregate_summary_{timestamp}.txt"
+    
+    all_modified_files = set()
+    total_entries = 0
+    
+    with open(summary_file, 'w', encoding='utf-8') as f:
+        now_str = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
+        
+        # Header
+        f.write(f"{'#'*100}\n")
+        f.write(f"#  AGGREGATE FILES SUMMARY\n")
+        f.write(f"#  Generated: {now_str}\n")
+        f.write(f"#  Total aggregate files processed: {len(aggregate_files)}\n")
+        f.write(f"{'#'*100}\n\n")
+        
+        # Section 1: Overview of aggregate files
+        f.write(f"{'='*100}\n")
+        f.write(f"SECTION 1: AGGREGATE FILES OVERVIEW\n")
+        f.write(f"{'='*100}\n\n")
+        
+        for idx, agg_file in enumerate(aggregate_files, 1):
+            size = agg_file.stat().st_size
+            mod_time = datetime.fromtimestamp(agg_file.stat().st_mtime, tz=timezone.utc)
+            f.write(f"{idx}. {agg_file.name}\n")
+            f.write(f"   Size: {size:,} bytes\n")
+            f.write(f"   Created: {mod_time.strftime('%Y-%m-%d %H:%M:%S UTC')}\n\n")
+        
+        # Section 2: Extract modified files from each aggregate
+        f.write(f"\n{'='*100}\n")
+        f.write(f"SECTION 2: FILES MODIFIED/REFERENCED ACROSS ALL AGGREGATES\n")
+        f.write(f"{'='*100}\n\n")
+        
+        for agg_file in aggregate_files:
+            f.write(f"\n{'-'*80}\n")
+            f.write(f"From: {agg_file.name}\n")
+            f.write(f"{'-'*80}\n\n")
+            
+            try:
+                with open(agg_file, 'r', encoding='utf-8') as af:
+                    content = af.read()
+                    
+                    # Extract files mentioned in "FILE:" sections
+                    file_matches = re.findall(r'^FILE:\s*(.+)$', content, re.MULTILINE)
+                    local_files = set(file_matches)
+                    all_modified_files.update(local_files)
+                    
+                    # Count entries
+                    entry_count = content.count('Point ')
+                    total_entries += entry_count
+                    
+                    if local_files:
+                        f.write(f"Files referenced ({len(local_files)}):\n")
+                        for file_ref in sorted(local_files):
+                            f.write(f"  - {file_ref}\n")
+                    else:
+                        f.write(f"No specific files referenced.\n")
+                    
+                    f.write(f"\nTotal prompt entries: {entry_count}\n")
+            except Exception as e:
+                f.write(f"Error reading {agg_file.name}: {str(e)}\n")
+        
+        # Section 3: Unique files summary
+        f.write(f"\n\n{'='*100}\n")
+        f.write(f"SECTION 3: ALL UNIQUE FILES MODIFIED/REFERENCED\n")
+        f.write(f"{'='*100}\n\n")
+        f.write(f"Total unique files: {len(all_modified_files)}\n\n")
+        
+        for file_ref in sorted(all_modified_files):
+            f.write(f"  - {file_ref}\n")
+        
+        # Section 4: Statistics
+        f.write(f"\n\n{'='*100}\n")
+        f.write(f"SECTION 4: SUMMARY STATISTICS\n")
+        f.write(f"{'='*100}\n\n")
+        f.write(f"Total aggregate files: {len(aggregate_files)}\n")
+        f.write(f"Total unique files referenced: {len(all_modified_files)}\n")
+        f.write(f"Total prompt entries across all aggregates: {total_entries}\n")
+        
+        # Section 5: Modified files list for tracking
+        f.write(f"\n\n{'='*100}\n")
+        f.write(f"SECTION 5: AGGREGATE FILES INCLUDED IN THIS SUMMARY\n")
+        f.write(f"{'='*100}\n\n")
+        
+        for agg_file in aggregate_files:
+            f.write(f"  - {agg_file.name}\n")
+    
+    return (
+        f"Successfully created summary of {len(aggregate_files)} aggregate file(s). "
+        f"Found {len(all_modified_files)} unique file(s) referenced across {total_entries} prompt entries. "
+        f"Summary saved to {summary_file.name}"
+    )
+
+
+def create_readme_from_final(final_logs_dir: Path, prompt_logs_dir: Path) -> str:
+    """
+    Create a comprehensive README.md file using all data from final logs folder.
+    
+    Reads all files in final_logs and creates a structured README with:
+    - Project overview
+    - File descriptions
+    - Usage statistics
+    - Workflow documentation
+    
+    Args:
+        final_logs_dir: Path to final logs directory
+        prompt_logs_dir: Path to base prompt logs directory (for context)
+        
+    Returns:
+        Success message with README details
+    """
+    if not final_logs_dir.exists():
+        return "Final logs directory does not exist."
+    
+    final_files = sorted(final_logs_dir.glob('*.txt'))
+    
+    if not final_files:
+        return "No final log files found to create README from."
+    
+    # Create README
+    readme_file = prompt_logs_dir / "README.md"
+    
+    with open(readme_file, 'w', encoding='utf-8') as f:
+        now_str = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
+        
+        # Title and intro
+        f.write(f"# Prompt Documentation - Project README\n\n")
+        f.write(f"**Generated:** {now_str}\n\n")
+        f.write(f"---\n\n")
+        
+        # Overview
+        f.write(f"## 📋 Overview\n\n")
+        f.write(f"This README was automatically generated from the prompt documentation system. ")
+        f.write(f"It provides a comprehensive overview of all logged prompts, aggregations, and summaries.\n\n")
+        
+        # Directory structure
+        f.write(f"## 📂 Directory Structure\n\n")
+        f.write(f"```\n")
+        f.write(f"prompt_logs/\n")
+        f.write(f"├── temp_logs/        # Temporary prompt logs (cleared after aggregation)\n")
+        f.write(f"├── final_logs/       # Finalized prompt logs and summaries\n")
+        f.write(f"├── aggregate_logs/   # Aggregated reports with detailed analysis\n")
+        f.write(f"└── README.md         # This file\n")
+        f.write(f"```\n\n")
+        
+        # Final logs overview
+        f.write(f"## 📊 Final Logs Summary\n\n")
+        f.write(f"Total files in final_logs: **{len(final_files)}**\n\n")
+        
+        # List each file with details
+        f.write(f"### Files in final_logs:\n\n")
+        
+        for idx, final_file in enumerate(final_files, 1):
+            size = final_file.stat().st_size
+            mod_time = datetime.fromtimestamp(final_file.stat().st_mtime, tz=timezone.utc)
+            
+            f.write(f"{idx}. **{final_file.name}**\n")
+            f.write(f"   - Size: {size:,} bytes\n")
+            f.write(f"   - Created: {mod_time.strftime('%Y-%m-%d %H:%M:%S UTC')}\n")
+            
+            # Try to extract some context from the file
+            try:
+                with open(final_file, 'r', encoding='utf-8') as ff:
+                    content = ff.read(500)  # Read first 500 chars
+                    if 'SUMMARY' in content or 'Summary' in content:
+                        f.write(f"   - Type: Summary Report\n")
+                    elif 'all_prompts' in final_file.name:
+                        f.write(f"   - Type: Complete Prompt Log\n")
+                    else:
+                        f.write(f"   - Type: Log File\n")
+            except:
+                pass
+            
+            f.write(f"\n")
+        
+        # Workflow documentation
+        f.write(f"## 🔄 Workflow\n\n")
+        f.write(f"1. **Save Current Prompt**: Individual prompts are saved to `temp_logs/`\n")
+        f.write(f"2. **Save All Prompts**: Complete session logs are saved to `final_logs/`\n")
+        f.write(f"3. **Aggregate Prompts**: Temp logs are analyzed and aggregated into `aggregate_logs/`\n")
+        f.write(f"4. **Summarize Aggregates**: Summaries are created from aggregates and saved to `final_logs/`\n")
+        f.write(f"5. **Generate README**: This README is created from final logs\n\n")
+        
+        # Tools available
+        f.write(f"## 🛠️ Available Tools\n\n")
+        f.write(f"- `save_current_prompt` - Save current prompt to temp logs\n")
+        f.write(f"- `save_all_prompts` - Save all session prompts to final logs\n")
+        f.write(f"- `aggregate_prompts` - Aggregate temp logs into structured reports\n")
+        f.write(f"- `clear_temp_logs` - Clear all temporary log files\n")
+        f.write(f"- `clear_aggregate_logs` - Clear all aggregate log files\n")
+        f.write(f"- `summarize_aggregates` - Create summary from aggregate files\n")
+        f.write(f"- `create_readme` - Generate this README file\n\n")
+        
+        # Statistics
+        f.write(f"## 📈 Statistics\n\n")
+        total_size = sum(f.stat().st_size for f in final_files)
+        f.write(f"- Total files in final_logs: {len(final_files)}\n")
+        f.write(f"- Total storage used: {total_size:,} bytes ({total_size/1024:.2f} KB)\n")
+        
+        # Footer
+        f.write(f"\n---\n\n")
+        f.write(f"*This README was automatically generated by the Prompt Documentation MCP Server.*\n")
+    
+    return f"Successfully created README.md with information from {len(final_files)} final log file(s). README saved to {readme_file}"
+
