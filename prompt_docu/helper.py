@@ -1,65 +1,153 @@
 """
-Helper functions for file operations
+Helper functions for file operations — Sequential Thinking Pattern
 
 This module contains utility functions for handling file I/O operations.
+The primary entry-point is ``save_prompt_sequential`` which persists each
+prompt/thought first (documentation before execution) — mirroring how
+the ``sequentialthinking`` MCP tool works.
 """
 
 import csv
+import json
 import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Dict, Tuple
+from typing import Dict, List, Optional
 
+
+# ═════════════════════════════════════════════════════════════════════════════
+#  Sequential prompt save  (the core "save first" function)
+# ═════════════════════════════════════════════════════════════════════════════
+
+def save_prompt_sequential(
+    file_path: Path,
+    message: str,
+    file_names: List[str],
+    prompt_number: int,
+    total_prompts: int,
+    next_prompt_needed: bool,
+    is_revision: bool = False,
+    revises_prompt: Optional[int] = None,
+    branch_from_prompt: Optional[int] = None,
+    branch_id: Optional[str] = None,
+    needs_more_prompts: bool = False,
+) -> str:
+    """
+    Save a single sequential prompt entry to disk.
+
+    This is the *first* thing executed on every ``document_prompt`` call —
+    the documentation is persisted **before** any pipeline logic runs.
+
+    The file format includes full sequential-thinking metadata so that
+    later aggregation can reconstruct the entire thought chain.
+
+    Args:
+        file_path:           Destination path for the log entry.
+        message:             The prompt / thinking-step text.
+        file_names:          Files in context for this prompt.
+        prompt_number:       Current 1-based sequence number.
+        total_prompts:       Estimated total prompts (adjustable).
+        next_prompt_needed:  Whether the chain continues after this.
+        is_revision:         True if this revises a prior prompt.
+        revises_prompt:      The prompt number being revised (if any).
+        branch_from_prompt:  Branching-point prompt number (if any).
+        branch_id:           Branch identifier string (if any).
+        needs_more_prompts:  Dynamic extension flag.
+
+    Returns:
+        Human-readable confirmation string.
+    """
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+
+    timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
+
+    with open(file_path, 'w', encoding='utf-8') as f:
+        # ── Header with sequence metadata ────────────────────────────────
+        f.write(f"{'#' * 80}\n")
+        f.write(f"#  SEQUENTIAL PROMPT  #{prompt_number} / {total_prompts}\n")
+        f.write(f"#  Timestamp   : {timestamp}\n")
+        f.write(f"#  Next needed : {next_prompt_needed}\n")
+        if is_revision:
+            f.write(f"#  Revision of : Prompt #{revises_prompt}\n")
+        if branch_from_prompt:
+            f.write(f"#  Branch from : Prompt #{branch_from_prompt}  (branch: {branch_id})\n")
+        if needs_more_prompts:
+            f.write(f"#  Extension   : More prompts requested beyond estimate\n")
+        f.write(f"{'#' * 80}\n\n")
+
+        # ── Prompt body ──────────────────────────────────────────────────
+        f.write(f"[{timestamp}]\n")
+        f.write(f"Prompt #{prompt_number}:\n")
+        f.write(f"{message}\n\n")
+
+        # ── Files in context ─────────────────────────────────────────────
+        if file_names:
+            f.write("Files in context:\n")
+            for idx, name in enumerate(file_names, 1):
+                f.write(f"  {idx}. {name}\n")
+        else:
+            f.write("Files in context: None\n")
+
+        f.write(f"\n{'=' * 80}\n")
+
+        # ── Machine-readable JSON block (for aggregation) ────────────────
+        meta = {
+            "promptNumber": prompt_number,
+            "totalPrompts": total_prompts,
+            "nextPromptNeeded": next_prompt_needed,
+            "isRevision": is_revision,
+            "revisesPrompt": revises_prompt,
+            "branchFromPrompt": branch_from_prompt,
+            "branchId": branch_id,
+            "needsMorePrompts": needs_more_prompts,
+            "timestamp": timestamp,
+            "fileCount": len(file_names) if file_names else 0,
+        }
+        f.write(f"\n<!-- META: {json.dumps(meta)} -->\n")
+
+    file_count = len(file_names) if file_names else 0
+    return (
+        f"Prompt #{prompt_number}/{total_prompts} saved to {file_path.name} "
+        f"({file_count} file(s) in context)"
+    )
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+#  Legacy bulk-save  (used by the `save_all_prompts` utility tool)
+# ═════════════════════════════════════════════════════════════════════════════
 
 def save_prompt_to_file(file_path: Path, message: str, file_names: List[str]) -> str:
     """
-    Save prompt message and file names to a log file.
-    
+    Save prompt message and file names to a log file (append mode).
+
+    This is the simpler, non-sequential save used by ``save_all_prompts``
+    to dump an entire session's worth of text into ``final_logs``.
+
     Args:
-        file_path: Path object pointing to the file where data should be saved
-        message: The prompt/message text to save
-        file_names: List of file names/paths in context
-        
+        file_path: Destination path.
+        message:   The prompt / message text to save.
+        file_names: List of file names / paths in context.
+
     Returns:
-        Success message with file count
+        Human-readable confirmation string.
     """
-    # Ensure parent directory exists
     file_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     with open(file_path, 'a', encoding='utf-8') as f:
         timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
-        
         f.write(f"[{timestamp}]\n")
         f.write(f"Prompt: {message}\n")
-        
         if file_names:
-            f.write(f"\nFiles in context:\n")
+            f.write("\nFiles in context:\n")
             for idx, file_name in enumerate(file_names, 1):
                 f.write(f"  {idx}. {file_name}\n")
         else:
-            f.write(f"\nFiles in context: None\n")
-        
-        f.write(f"{'='*80}\n\n")
-    
+            f.write("\nFiles in context: None\n")
+        f.write(f"{'=' * 80}\n\n")
+
     file_count = len(file_names) if file_names else 0
     return f"Your text has been saved to {file_path.name}! (Captured {file_count} file(s) in context)"
-
-
-def get_daily_folder_path(base_path: Path) -> Path:
-    """
-    Get the daily folder path based on current UTC date.
-    
-    Args:
-        base_path: Base directory path
-        
-    Returns:
-        Path to the daily folder (YYYY-MM-DD format)
-    """
-    date_str = datetime.now(timezone.utc).strftime('%Y-%m-%d')
-    daily_path = base_path / date_str
-    daily_path.mkdir(parents=True, exist_ok=True)
-    return daily_path
 
 
 def aggregate_prompts(temp_logs_dir: Path, aggregate_logs_dir: Path) -> str:

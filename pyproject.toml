@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "prompt-docu"
-version = "0.1.1"
+version = "0.2.0"
 description = "A minimal MCP server for logging, tracking, and documenting development prompts"
 readme = "README.md"
 requires-python = ">=3.8"
