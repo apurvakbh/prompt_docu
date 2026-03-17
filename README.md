@@ -1,81 +1,103 @@
 # Prompt Docu
 
-A minimal Model Context Protocol (MCP) server for logging, tracking, and documenting development prompts.
+A Model Context Protocol (MCP) server for sequential prompt documentation using the Sequential Thinking pattern.
 
 ## Overview
 
 ## What problem does it solve?
 As software development has shifted from manual coding to writing prompts for code generation, **Prompt Docu** addresses the critical need to document and track the evolution of AI-assisted development sessions.
 
-**Prompt Docu** is a lightweight tool designed to capture the context of your development sessions. It runs as an MCP server and provides utilities to save prompts, track file contexts, and aggregate logs into structured reports.
+**Prompt Docu** follows the **Sequential Thinking MCP pattern**: instead of separate tools for different operations, it uses a single primary tool (`document_prompt`) that is called repeatedly—once per prompt/thought. Each call **saves the prompt first** (documentation before execution), then returns chain status. When the thought chain ends, the full documentation pipeline runs automatically.
 
 ## Features
 
-This server exposes **seven powerful tools** to help manage your development documentation workflow:
+This server exposes **one primary tool** and **four utility tools** following the Sequential Thinking pattern:
 
-### Core Logging Tools
+### Primary Sequential Tool
 
-- **`save_current_prompt`**  
-  Captures the current prompt and list of active file contexts, saving them to temporary logs (`temp_logs/`). Use this to document incremental changes or manual code modifications during development.
+- **`document_prompt`**  
+  The core sequential-thinking tool called repeatedly throughout a session—once per prompt/thought. Each call:
+  
+  **SAVES FIRST**: Persists the prompt to `temp_logs/` with full chain metadata (prompt number, total, revision info, branch info) before anything else happens.
+  
+  **Parameters** (mirrors Sequential Thinking MCP):
+  - `message` – Your current prompt/thinking step
+  - `file_names` – Files in context for this prompt
+  - `promptNumber` – Current step in sequence (1-based)
+  - `totalPrompts` – Estimated total (adjustable)
+  - `nextPromptNeeded` – Whether more prompts follow (when `false`, triggers auto-pipeline)
+  - `isRevision` – Revises a previous prompt
+  - `revisesPrompt` – Which prompt number to revise
+  - `branchFromPrompt` – Branching point
+  - `branchId` – Branch identifier
+  - `needsMorePrompts` – Dynamic extension flag
+  
+  **Auto-Pipeline**: When `nextPromptNeeded=false`, automatically runs:
+  1. Aggregate all un-aggregated temp logs → `aggregate_logs/`
+  2. Summarize aggregates → `final_logs/`
+  3. Generate README.md in `prompt_logs/`
+  
+  **Returns**: JSON status similar to sequential thinking:
+  ```json
+  {
+    "promptNumber": 3,
+    "totalPrompts": 5,
+    "nextPromptNeeded": true,
+    "branches": [],
+    "promptHistoryLength": 3,
+    "savedTo": "prompt_20260317_123456.txt"
+  }
+  ```
+
+### Utility Tools
 
 - **`save_all_prompts`**  
-  Archives the entire session's prompts and file history into a timestamped final log (`final_logs/`). This creates a permanent record of all prompts used in a session.
-
-### Analysis & Aggregation Tools
-
-- **`aggregate_prompts`**  
-  Processes all un-aggregated temporary logs and compiles them into a comprehensive, structured report in `aggregate_logs/`. This tool:
-  - Saves the current prompt first
-  - Reads all `.txt` files from `temp_logs/` that haven't been processed yet
-  - Parses prompts to extract timestamps, actions, and file references
-  - Groups changes by file with chronological tracking
-  - Maintains a CSV tracker (`aggregation_tracker.csv`) to prevent duplicate processing
-  - Creates detailed reports with three sections: source files, per-file aggregate points, and raw content
-
-- **`summarize_aggregates`**  
-  Creates a comprehensive summary of all aggregate files and saves it to `final_logs/`. This tool analyzes all aggregate reports to extract:
-  - Overview of all aggregate files processed
-  - All files modified/referenced across sessions
-  - Unique file lists and statistics
-  - Total prompt entries across all aggregates
-
-- **`create_readme`**  
-  Generates a comprehensive README.md in the `prompt_logs/` directory using data from `final_logs/`. The generated README includes:
-  - Project overview and directory structure
-  - Complete file listings with sizes and timestamps
-  - Workflow documentation
-  - Available tools reference
-  - Statistics and metadata
-
-### Maintenance Tools
+  Bulk-save all session prompts and file history into a timestamped final log (`final_logs/`). Use this for manual archival of complete sessions.
 
 - **`clear_temp_logs`**  
-  Removes all `.txt` files from `temp_logs/` folder while preserving directory structure. Use this after aggregation to clean up processed temporary files.
+  Removes all `.txt` files from `temp_logs/` while preserving directory structure. Use after aggregation to clean up processed temporary files.
 
 - **`clear_aggregate_logs`**  
-  Removes all `.txt` files from `aggregate_logs/` folder while preserving the CSV tracker. Use this to clean up old aggregate reports while maintaining processing history.
+  Removes all `.txt` files from `aggregate_logs/` while preserving the CSV tracker. Use to clean up old aggregate reports.
+
+- **`create_readme`**  
+  Manually triggers README.md generation in `prompt_logs/` using data from `final_logs/`. (Note: `document_prompt` auto-generates this when chain ends.)
 
 ## Workflow
 
-The tools are designed to work in a three-tier workflow:
+The Sequential Thinking pattern creates a natural, iterative documentation flow:
 
-1. **Capture Phase** (`temp_logs/`)  
-   - Use `save_current_prompt` to capture individual prompts during active development
-   - Each prompt is saved with UTC timestamp, full text, and file context
+### Sequential Prompt Documentation
 
-2. **Analysis Phase** (`aggregate_logs/`)  
-   - Use `aggregate_prompts` to process temp logs into structured reports
-   - CSV tracker ensures each temp file is only aggregated once
-   - Reports organize changes chronologically per file
+1. **Call `document_prompt` repeatedly** — once per prompt/thought during your session:
+   ```
+   Prompt #1: "Analyze the problem..."
+   Prompt #2: "Design the solution..."
+   Prompt #3: "Revise approach..." (can revise Prompt #2)
+   ...
+   Prompt #N: "Final implementation" (nextPromptNeeded=false)
+   ```
 
-3. **Archive Phase** (`final_logs/`)  
-   - Use `save_all_prompts` to create permanent session archives
-   - Use `summarize_aggregates` to create high-level summaries
-   - Use `create_readme` to generate documentation from final logs
+2. **Each call SAVES FIRST**: The prompt is persisted to `temp_logs/` with full metadata before any processing
 
-4. **Cleanup Phase**  
-   - Use `clear_temp_logs` after successful aggregation
+3. **Chain Status**: Each call returns JSON showing progress through the thought chain
+
+4. **Auto-Pipeline**: When `nextPromptNeeded=false`, the server automatically:
+   - Aggregates temp logs → `aggregate_logs/`
+   - Summarizes aggregates → `final_logs/`
+   - Generates README.md
+
+### Traditional Workflow (Using Utilities)
+
+Alternatively, use the utility tools for manual control:
+
+1. **Archive Phase**  
+   - Use `save_all_prompts` to manually create permanent session archives in `final_logs/`
+
+2. **Cleanup Phase**  
+   - Use `clear_temp_logs` to remove processed temp files
    - Use `clear_aggregate_logs` to remove old aggregate reports
+   - Use `create_readme` to manually regenerate documentation
 
 
 ## Directory Structure
@@ -84,24 +106,29 @@ The server organizes logs automatically based on your configuration:
 
 ```
 prompt_logs/
-├── temp_logs/          # Individual prompt captures (working directory)
-│   └── prompt_YYYYMMDD_HHMMSS.txt
+├── temp_logs/          # Sequential prompt captures with chain metadata
+│   └── prompt_YYYYMMDD_HHMMSS.txt  (includes promptNumber, revisions, branches)
 ├── final_logs/         # Complete session archives and summaries
 │   ├── all_prompts_YYYYMMDD_HHMMSS.txt
 │   └── aggregate_summary_YYYYMMDD_HHMMSS.txt
 ├── aggregate_logs/     # Compiled analysis reports
 │   ├── aggregate_YYYYMMDD_HHMMSS.txt
 │   └── aggregation_tracker.csv
-└── README.md          # Auto-generated documentation (optional)
+└── README.md          # Auto-generated documentation
 ```
 
 ### Key Files
 
-- **`prompt_*.txt`** in `temp_logs/`: Individual prompt captures with timestamps and file contexts
-- **`all_prompts_*.txt`** in `final_logs/`: Complete session logs with all prompts
+- **`prompt_*.txt`** in `temp_logs/`: Individual sequential prompt captures with:
+  - Full chain metadata (prompt #, total, next needed)
+  - Revision tracking (which prompt this revises)
+  - Branch information (branch ID, branch point)
+  - Machine-readable JSON metadata block for aggregation
+- **`all_prompts_*.txt`** in `final_logs/`: Complete session archives (bulk-save format)
 - **`aggregate_*.txt`** in `aggregate_logs/`: Structured reports with per-file change tracking
 - **`aggregate_summary_*.txt`** in `final_logs/`: High-level summaries of all aggregates
-- **`aggregation_tracker.csv`**: CSV database tracking which temp files have been aggregated to prevent duplicate processing
+- **`aggregation_tracker.csv`**: CSV database tracking processed temp files
+- **`README.md`**: Auto-generated when `document_prompt` chain ends or via `create_readme` tool
 
 ## Configuration
 
@@ -186,16 +213,93 @@ For other MCP clients (VS Code extensions, custom implementations), configure th
 
 ## Usage Example
 
-Typical workflow for documenting a development session:
+Typical workflow using the Sequential Thinking pattern:
 
-1. During development, prompts are automatically captured when you use `save_current_prompt`
-2. When ready to analyze, call `aggregate_prompts` to create structured reports
-3. Use `summarize_aggregates` to create a high-level overview
-4. Archive the entire session with `save_all_prompts`
-5. Optionally generate documentation with `create_readme`
-6. Clean up with `clear_temp_logs` after aggregation
+### Sequential Documentation (Recommended)
+
+The AI automatically calls `document_prompt` repeatedly as it works through your request:
+
+```
+Call 1: document_prompt(
+  message="Analyzing the problem...",
+  file_names=["main.py"],
+  promptNumber=1,
+  totalPrompts=5,
+  nextPromptNeeded=true
+)
+→ Saves to temp_logs/prompt_20260317_120001.txt
+→ Returns: {"promptNumber": 1, "totalPrompts": 5, "nextPromptNeeded": true, ...}
+
+Call 2: document_prompt(
+  message="Designing the solution...",
+  file_names=["main.py", "helper.py"],
+  promptNumber=2,
+  totalPrompts=5,
+  nextPromptNeeded=true
+)
+→ Saves to temp_logs/prompt_20260317_120002.txt
+→ Returns: {"promptNumber": 2, "totalPrompts": 5, "nextPromptNeeded": true, ...}
+
+...
+
+Call N: document_prompt(
+  message="Implementation complete",
+  file_names=["main.py", "helper.py", "tests.py"],
+  promptNumber=5,
+  totalPrompts=5,
+  nextPromptNeeded=false  ← Chain ends
+)
+→ Saves to temp_logs/prompt_20260317_120005.txt
+→ Auto-runs pipeline: aggregate → summarize → README
+→ Returns: {"promptNumber": 5, ..., "nextPromptNeeded": false} + pipeline report
+```
+
+### Manual Workflow (Using Utilities)
+
+For manual control or batch operations:
+
+1. Archive the entire session: `save_all_prompts(message=..., file_names=...)`
+2. Clean up processed files: `clear_temp_logs()`
+3. Regenerate documentation: `create_readme()`
 
 ## Tips
-Use larger models with prompt docu like claude sonnet 4.5 and others. 
 
-The project is still in development stage, we request users to please create PRs if you see any limitations. 
+- Use larger models with Prompt Docu like Claude Sonnet 4.5 and others for best results with the Sequential Thinking pattern
+- The `document_prompt` tool mirrors how sequential thinking works—each call builds on previous prompts
+- Let the AI manage the sequential flow naturally; the documentation happens automatically
+- Use `isRevision=true` to mark when you're reconsidering earlier prompts
+- Branch exploration is supported via `branchId` for alternative solution paths
+
+## Understanding Sequential Thinking Pattern
+
+The Sequential Thinking MCP pattern (inspired by the `sequentialthinking` MCP tool) works differently from traditional multi-tool MCPs:
+
+**Traditional approach**: Separate tools for different operations (save, aggregate, summarize, etc.)
+
+**Sequential Thinking approach**: ONE tool called repeatedly in a chain
+- Each call represents one step in the thought/prompt sequence
+- Each call SAVES FIRST (documentation before execution)
+- State accumulates across calls (prompt history, branches, revisions)
+- When the chain ends, the full pipeline runs automatically
+
+**Benefits**:
+- Natural documentation flow that mirrors how AI thinks through problems
+- No need to remember which tool to call when—just continue the chain
+- Automatic aggregation and summarization when the session completes
+- Support for revisions and branching (explore alternative approaches)
+- Complete audit trail with sequence numbers and relationships
+
+## What's New in v0.2.0
+
+**Major architectural refactor** to Sequential Thinking MCP pattern:
+
+- **New primary tool**: `document_prompt` — called repeatedly (once per prompt), saves first, returns chain status
+- **Removed tools**: `save_current_prompt`, `aggregate_prompts`, `summarize_aggregates`, `document_session` (functionality absorbed into sequential flow)
+- **Kept utilities**: `save_all_prompts`, `clear_temp_logs`, `clear_aggregate_logs`, `create_readme`
+- **Auto-pipeline**: When prompt chain ends (`nextPromptNeeded=false`), automatically runs aggregate → summarize → README
+- **Sequential metadata**: Each saved prompt includes full chain context (number, total, revisions, branches)
+- **Code cleanup**: Removed unused `src/` folder, dead imports, and `get_daily_folder_path` function
+
+## Contributing
+
+The project is still in development. We request users to please create PRs if you see any limitations or have suggestions for improvement. 
